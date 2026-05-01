@@ -1,1 +1,21 @@
-/gemin_rules.md
+# .NET Core / .NET 5+ / .NET 10.0
+[Bb]in/
+[Oo]bj/
+out/
+
+# Visual Studio files
+.vs/
+*.user
+*.userosscache
+*.sln.docstates
+*.suo
+
+# Visual Studio Code
+.vscode/
+
+# Project specific
+app_execution.log
+
+# Temporary files
+*.tmp
+*.log
