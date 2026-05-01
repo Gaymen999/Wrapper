@@ -15,6 +15,7 @@ out/
 
 # Project specific
 app_execution.log
+gemini_rules.md
 
 # Temporary files
 *.tmp
