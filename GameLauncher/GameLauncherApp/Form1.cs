@@ -10,14 +10,18 @@ namespace GameLauncherApp
     public partial class Form1 : Form
     {
         private readonly LauncherEngine _launcherEngine;
-        private readonly List<GameProfile> _gameProfiles;
+        private List<GameProfile> _games;
 
         public Form1()
         {
             InitializeComponent();
             _launcherEngine = new LauncherEngine();
-            _gameProfiles = new List<GameProfile>();
-            Logger.LogInfo("Application UI Initialized.");
+            
+            // Load persistent profiles on startup
+            _games = ProfileManager.LoadProfiles();
+            UpdateGameList();
+            
+            Logger.LogInfo("Application UI Initialized and Profiles Loaded.");
         }
 
         private void btnAddGame_Click(object sender, EventArgs e)
@@ -34,20 +38,31 @@ namespace GameLauncherApp
                         string selectedPath = openFileDialog.FileName;
                         string fileName = Path.GetFileNameWithoutExtension(selectedPath);
 
-                        // Create a profile with default optimizations
-                        GameProfile newProfile = CreateDefaultProfile(fileName, selectedPath);
+                        // Create a profile with user-configurable defaults (Clean Slate)
+                        GameProfile newProfile = new GameProfile
+                        {
+                            GameName = fileName,
+                            ExePath = selectedPath,
+                            CpuAffinityMask = 0x555, // 6 Physical Cores on 12-thread CPU
+                            PriorityClass = ProcessPriorityClass.High,
+                            KeyRemappings = new Dictionary<int, int>(),
+                            BackgroundProcessesToSuspend = new List<string>()
+                        };
                         
-                        _gameProfiles.Add(newProfile);
-                        lstGames.Items.Add(newProfile.GameName);
+                        _games.Add(newProfile);
                         
-                        Logger.LogInfo($"Game added to library: {newProfile.GameName} ({selectedPath})");
+                        // Persist the updated list immediately
+                        ProfileManager.SaveProfiles(_games);
+                        UpdateGameList();
+                        
+                        Logger.LogInfo($"Game added and persisted: {newProfile.GameName}");
                     }
                 }
             }
             catch (Exception ex)
             {
-                Logger.LogError("Failed to add game to library", ex);
-                MessageBox.Show("Error adding game. Check log for details.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Logger.LogError("Failed to add and persist new game profile", ex);
+                MessageBox.Show("Error adding game. Check app_execution.log for details.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -61,7 +76,7 @@ namespace GameLauncherApp
 
             try
             {
-                GameProfile selectedProfile = _gameProfiles[lstGames.SelectedIndex];
+                GameProfile selectedProfile = _games[lstGames.SelectedIndex];
                 
                 SetUiState(false);
                 lblStatus.Text = $"Status: Running {selectedProfile.GameName}";
@@ -77,24 +92,24 @@ namespace GameLauncherApp
                 Logger.LogError("Critical UI failure during game launch sequence", ex);
                 lblStatus.Text = "Status: Launch Error";
                 SetUiState(true);
+                MessageBox.Show("A critical error occurred. Please check the log file.", "Execution Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
-        private GameProfile CreateDefaultProfile(string name, string path)
+        private void UpdateGameList()
         {
-            // Default Optimization: SMT Bypass for 6C/12T (0x555) and F -> V remapping
-            return new GameProfile
+            try
             {
-                GameName = name,
-                ExePath = path,
-                CpuAffinityMask = 0x555, // 010101010101 in binary: targets Threads 0, 2, 4, 6, 8, 10
-                PriorityClass = ProcessPriorityClass.High,
-                KeyRemappings = new Dictionary<int, int>
+                lstGames.Items.Clear();
+                foreach (var profile in _games)
                 {
-                    { 0x46, 0x56 } // 'F' (0x46) -> 'V' (0x56)
-                },
-                BackgroundProcessesToSuspend = new List<string>() // Empty by default for stability
-            };
+                    lstGames.Items.Add(profile.GameName);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Failed to update ListBox UI", ex);
+            }
         }
 
         private void SetUiState(bool enabled)
